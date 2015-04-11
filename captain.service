@@ -1,0 +1,21 @@
+[Unit]
+Description=Captain loadbalancer Service
+
+[Service]
+EnvironmentFile=/etc/environment
+Restart=always
+RestartSec=20s
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker kill captain
+ExecStartPre=-/usr/bin/docker rm captain
+ExecStartPre=/usr/bin/docker pull 10.1.1.85:5000/slush-captain
+ExecStart=/usr/bin/bash -c \
+"/usr/bin/docker run --privileged --name captain \
+-p 80:80 \
+-p 443:443 \
+-e HOST_IP=${COREOS_PRIVATE_IPV4} \
+-e ETCD_PORT=4001 \
+10.1.1.85:5000/slush-captain"
+
+[X-Fleet]
+Global=true

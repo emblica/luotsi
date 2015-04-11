@@ -1,0 +1,57 @@
+global
+    log 127.0.0.1 local0
+    log 127.0.0.1 local1 notice
+    maxconn 200000
+    user haproxy
+    group haproxy
+    #daemon
+
+defaults
+    maxconn 200000
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    option forwardfor
+    option http-server-close
+    option contstats
+    stats enable
+    stats auth admin:slush2015greatparty
+    stats uri /haproxy
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+
+frontend http_proxy
+
+    # default_backend    slush_backend
+    bind *:80
+    bind *:443 ssl crt /data/captain/slush15.pem
+
+    # Host acls
+{{#each services}}
+  {{#unless meta.customacl}}
+    acl {{{name}}}_acl hdr(host) -i {{{host}}}
+  {{/unless}}
+  {{#each meta.acls}}
+    {{{this}}}
+  {{/each}}
+  {{#unless meta.customusebackend}}
+    use_backend {{{name}}}_backend if {{{name}}}_acl
+  {{/unless}}
+
+{{/each}}
+
+{{#each services}}
+backend {{{name}}}_backend
+        balance roundrobin
+        option httpclose
+        option forwardfor
+    {{#unless meta.allowhttp}}
+	redirect scheme https if !{ ssl_fc }
+    {{/unless}}
+    {{#each servers}}
+        server node_{{{name}}} {{{address}}} check
+    {{/each}}
+
+{{/each}}

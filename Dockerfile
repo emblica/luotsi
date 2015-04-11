@@ -15,7 +15,7 @@ RUN \
 	sed -i 's/^ENABLED=.*/ENABLED=1/' /etc/default/haproxy && \
 	rm -rf /var/lib/apt/lists/*
 
-ADD captain /data/captain
+ADD . /data/captain
 WORKDIR /data/captain
 RUN npm install
 

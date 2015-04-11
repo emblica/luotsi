@@ -1,5 +1,5 @@
 [Unit]
-Description=Captain loadbalancer Service
+Description=Luotsi loadbalancer Service
 
 [Service]
 EnvironmentFile=/etc/environment

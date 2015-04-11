@@ -1,8 +1,8 @@
 {
-  "name": "slush-captain",
+  "name": "slush-luotsi",
   "version": "1.0.0",
   "description": "",
-  "main": "captain.js",
+  "main": "luotsi.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

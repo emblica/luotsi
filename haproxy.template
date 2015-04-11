@@ -26,7 +26,7 @@ frontend http_proxy
 
     # default_backend    slush_backend
     bind *:80
-    bind *:443 ssl crt /data/captain/slush15.pem
+    bind *:443 ssl crt /data/luotsi/slush15.pem
 
     # Host acls
 {{#each services}}

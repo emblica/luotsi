@@ -1,3 +1,3 @@
-docker build -t slush/captain .
-docker tag -f slush/captain 10.1.1.85:5000/slush-captain
-docker push 10.1.1.85:5000/slush-captain
+docker build -t slush/luotsi .
+docker tag -f slush/luotsi 10.1.1.85:5000/slush-luotsi
+docker push 10.1.1.85:5000/slush-luotsi

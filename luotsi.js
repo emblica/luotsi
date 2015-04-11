@@ -151,7 +151,6 @@ function spawnHaproxy () {
 	if (pid && pid !== -1) {
 		args = getHaproxyArgs(pid);
 	}
-	console.log(haproxy_path, args);
 	var ha = spawn(haproxy_path, args);
 	pid = ha.pid;
 	ha.stdout.on('data', function (data) {

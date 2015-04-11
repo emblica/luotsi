@@ -15,9 +15,9 @@ RUN \
 	sed -i 's/^ENABLED=.*/ENABLED=1/' /etc/default/haproxy && \
 	rm -rf /var/lib/apt/lists/*
 
-ADD . /data/captain
-WORKDIR /data/captain
+ADD . /data/luotsi
+WORKDIR /data/luotsi
 RUN npm install
 
 EXPOSE 80 443
-CMD node captain.js
+CMD node luotsi.js

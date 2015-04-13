@@ -144,5 +144,6 @@ function handleServers (server_item) {
 function ip2hex (ip) {
 	var parts = ip.split('.');
 	ints = parts.map(parseInt);
-	return new Buffer(ints).toString('hex');
+	var k = new Buffer(ints).toString('hex');
+	return Math.random().toString(36).substr(2, 3) + k;
 }

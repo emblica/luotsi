@@ -3,12 +3,19 @@ var fs = require('fs');
 var Handlebars = require('handlebars');
 var debounce = require('debounce');
 var hash = require('object-hash');
-var spawn = require('child_process').spawn;
+
+var HAProxy = require('haproxy');
+
+var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg'});
 
 var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
 var haproxy_path = '/usr/sbin/haproxy';
-var pid = -1;
-var haproxy = spawnHaproxy();
+
+
+haproxy.start(function (err) {
+  console.error(err);
+});
+
 //etcd.set("/services/testservice/10.10.0.1", "10.10.0.1:4555");
 //etcd.set("/services/testservice/10.10.0.2", "10.10.0.2:4555");
 //etcd.set("/services/testservice/10.10.0.3", "10.10.0.3:4555");
@@ -90,7 +97,7 @@ function writeHaproxyConfig (services) {
 		var output = template({services: services});
 		//console.log(output, services);
 		fs.writeFile('haproxy.cfg', output, function (err) {
-			reloadHaproxy();
+			haproxy.reload();
 		});
 	});
 }
@@ -138,43 +145,4 @@ function ip2hex (ip) {
 	var parts = ip.split('.');
 	ints = parts.map(parseInt);
 	return new Buffer(ints).toString('hex');
-}
-
-
-
-function getHaproxyArgs (pid) {
-	return ['-f', 'haproxy.cfg', '-st', pid]
-}
-
-function spawnHaproxy () {
-	var args = ['-f', 'haproxy.cfg'];
-	if (pid && pid !== -1) {
-		args = getHaproxyArgs(pid);
-	}
-	var ha = spawn(haproxy_path, args);
-	pid = ha.pid;
-	ha.stdout.on('data', function (data) {
-  		console.log(''+data);
-	});
-
-	ha.stderr.on('data', function (data) {
-	  console.log('HAProxy stderr: ' + data);
-	});
-
-	ha.on('close', function (code) {
-	  if (code !== 0) {
-	    console.log('HAProxy process exited with code ' + code);
-	  }
-	});
-	return ha;
-}
-
-
-
-function reloadHaproxy () {
-	console.log(haproxy.pid, pid);
-	var tmp_haproxy = spawnHaproxy(pid);
-	haproxy.on('close', function () {
-		haproxy = tmp_haproxy;
-	});
 }

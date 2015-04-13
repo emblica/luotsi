@@ -25,11 +25,10 @@ defaults
     timeout server 50000ms
 
 frontend http_proxy
-
+    mode http
     # default_backend    slush_backend
     bind *:80
-    bind *:443 ssl no-sslv3 crt /data/luotsi/slush15.pem
-
+    reqadd X-Forwarded-Proto:\ http
     # Host acls
 {{#each services}}
   {{#unless meta.customacl}}
@@ -44,8 +43,29 @@ frontend http_proxy
 
 {{/each}}
 
+frontend https_proxy
+    mode http
+    # default_backend    slush_backend
+    bind *:443 ssl no-sslv3 crt /data/luotsi/slush15.pem
+    reqadd X-Forwarded-Proto:\ http
+    # Host acls
+{{#each services}}
+  {{#unless meta.customacl}}
+    acl {{{name}}}_acl hdr(host) -i {{{host}}}
+  {{/unless}}
+  {{#each meta.acls}}
+    {{{this}}}
+  {{/each}}
+  {{#unless meta.customusebackend}}
+    use_backend {{{name}}}_backend if {{{name}}}_acl
+  {{/unless}}
+
+{{/each}}
+
+
 {{#each services}}
 backend {{{name}}}_backend
+	mode http
         balance roundrobin
         option httpclose
         option forwardfor

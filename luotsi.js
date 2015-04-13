@@ -87,6 +87,7 @@ function fetchMetadata () {
 function writeHaproxyConfig (services) {
 	fs.readFile('haproxy.template', {encoding:'utf-8'}, function (err, content) {
 		var template = Handlebars.compile(content);
+		console.log(services);
 		var output = template({services: services});
 		//console.log(output, services);
 		fs.writeFile('haproxy.cfg', output, function (err) {
@@ -137,7 +138,8 @@ function handleServers (server_item) {
 function ip2hex (ip) {
 	var parts = ip.split('.');
 	ints = parts.map(parseInt);
-	return new Buffer(ints).toString('hex');
+	var k = new Buffer(ints).toString('hex');
+	return Math.random().toString(36).substr(2, 3) + k;
 }
 
 

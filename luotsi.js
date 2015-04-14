@@ -11,6 +11,24 @@ var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cf
 var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
 var haproxy_path = '/usr/sbin/haproxy';
 
+var PORT = 514;
+var HOST = '127.0.0.1';
+
+var dgram = require('dgram');
+var server = dgram.createSocket('udp4');
+
+server.on('listening', function () {
+    var address = server.address();
+    console.log('UDP Server listening on ' + address.address + ":" + address.port);
+});
+
+server.on('message', function (message, remote) {
+    console.log(message.toString('utf-8'));
+
+});
+
+server.bind(PORT, HOST);
+
 
 haproxy.start(function (err) {
   console.error(err);
@@ -26,18 +44,19 @@ var hostnames = {};
 var metadata = {};
 
 var tservices = "";
+var hash_meta = "";
 
 hostname_watcher = etcd.watcher("/hostnames", null, {recursive: true});
-hostname_watcher.on("change", debounce(fetchHostnames, 300));
+hostname_watcher.on("change", debounce(fetchHostnames, 200));
 hostname_watcher.on('error', console.log);
 
 service_watcher = etcd.watcher("/services", null, {recursive: true});
-service_watcher.on("change", debounce(fetchServices, 300));
+service_watcher.on("change", debounce(fetchServices, 200));
 service_watcher.on('error', console.log);
 
 
 service_watcher = etcd.watcher("/metadata", null, {recursive: true});
-service_watcher.on("change", debounce(fetchMetadata, 300));
+service_watcher.on("change", debounce(fetchMetadata, 200));
 service_watcher.on('error', console.log);
 
 
@@ -86,7 +105,10 @@ function fetchMetadata () {
                         });
                 } catch (e) {}
                 metadata = metas;
-                fetchServices(1);
+		if(hash(metadata) !== hash_meta) {
+	                fetchServices(1);
+		}
+		hash_meta = hash(metadata);
         });
 }
 
@@ -143,7 +165,7 @@ function handleServers (server_item) {
 
 function ip2hex (ip) {
 	var parts = ip.split('.');
-	ints = parts.map(parseInt);
+	ints = parts.map(function(part){return parseInt(part);});
 	var k = new Buffer(ints).toString('hex');
-	return Math.random().toString(36).substr(2, 3) + k;
+	return k;
 }

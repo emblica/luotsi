@@ -21,34 +21,16 @@ defaults
     stats enable
     stats auth admin:slush2015greatparty
     stats uri /haproxy
-    timeout connect 5000ms
+    timeout connect 10000ms
     timeout client 50000ms
     timeout server 50000ms
+    timeout check 5s
+    retries 3
 
 frontend http_proxy
-    mode http
     # default_backend    slush_backend
     bind *:80
-    reqadd X-Forwarded-Proto:\ http
-    # Host acls
-{{#each services}}
-  {{#unless meta.customacl}}
-    acl {{{name}}}_acl hdr(host) -i {{{host}}}
-  {{/unless}}
-  {{#each meta.acls}}
-    {{{this}}}
-  {{/each}}
-  {{#unless meta.customusebackend}}
-    use_backend {{{name}}}_backend if {{{name}}}_acl
-  {{/unless}}
-
-{{/each}}
-
-frontend https_proxy
-    mode http
-    # default_backend    slush_backend
     bind *:443 ssl no-sslv3 crt /data/luotsi/slush15.pem
-    reqadd X-Forwarded-Proto:\ http
     # Host acls
 {{#each services}}
   {{#unless meta.customacl}}
@@ -66,7 +48,6 @@ frontend https_proxy
 
 {{#each services}}
 backend {{{name}}}_backend
-	mode http
         balance roundrobin
         option httpclose
         option forwardfor

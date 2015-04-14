@@ -1,115 +1,97 @@
-var Etcd = require('node-etcd');
+
+// This is consul version of luotsi
+var consul = require('consul')({host: process.env.HOST_IP,  port: process.env.PORT});
+
+
 var fs = require('fs');
 var Handlebars = require('handlebars');
 var debounce = require('debounce');
-var hash = require('object-hash');
+var Q = require('q');
+
+// HAPROXY
 
 var HAProxy = require('haproxy');
-
 var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg'});
 
-var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
-var haproxy_path = '/usr/sbin/haproxy';
-
-var PORT = 514;
-var HOST = '127.0.0.1';
-
-var dgram = require('dgram');
-var server = dgram.createSocket('udp4');
-
-server.on('listening', function () {
-    var address = server.address();
-    console.log('UDP Server listening on ' + address.address + ":" + address.port);
-});
-
-server.on('message', function (message, remote) {
-    console.log(message.toString('utf-8'));
-
-});
-
-server.bind(PORT, HOST);
-
-
 haproxy.start(function (err) {
-  console.error(err);
+	console.error(err);
 });
 
-//etcd.set("/services/testservice/10.10.0.1", "10.10.0.1:4555");
-//etcd.set("/services/testservice/10.10.0.2", "10.10.0.2:4555");
-//etcd.set("/services/testservice/10.10.0.3", "10.10.0.3:4555");
-//etcd.set("/services/testservice2/10.10.0.1", "10.10.0.2:4556");
+
+// RSYSLOG UDP DAEMON
+var SLOGPORT = 514;
+var SLOGHOST = '127.0.0.1';
+require('./udlog')(SLOGHOST, SLOGPORT);
+
+
+
 
 var hostnames = {};
-
 var metadata = {};
 
-var tservices = "";
-var hash_meta = "";
 
-hostname_watcher = etcd.watcher("/hostnames", null, {recursive: true});
-hostname_watcher.on("change", debounce(fetchHostnames, 200));
-hostname_watcher.on('error', console.log);
+/**
+* SERVICE WATCHER
+* If new/changed web-service -> fetch nodes
+*/
+var service_watcher = consul.watch({ method: consul.catalog.service.list });
 
-service_watcher = etcd.watcher("/services", null, {recursive: true});
-service_watcher.on("change", debounce(fetchServices, 200));
-service_watcher.on('error', console.log);
+service_watcher.on('change', function(data, res) {
+	fetchServices();
+});
+
+service_watcher.on('error', function(err) {
+	console.log('error:', err);
+});
 
 
-service_watcher = etcd.watcher("/metadata", null, {recursive: true});
-service_watcher.on("change", debounce(fetchMetadata, 200));
-service_watcher.on('error', console.log);
+/**
+* HOSTNAME WATCHER
+* If new/changed hostname -> fetch hostnames
+*/
+var hostname_watcher = consul.watch({ method: consul.kv.keys, options: {key: 'hostnames/', recursive: true} });
 
-
-fetchHostnames();
-fetchMetadata();
-
-function fetchServices (cascade) {
-	etcd.get("/services", {recursive:true}, function (err, listing) {
-		if (err) { console.error(err); return;}
-		var services = [];
-		try {
-			services = listing.node.nodes.map(handleService);
-		} catch (e) {console.log(e, e.stack);}
-		services.sort(function (a, b) {
-			return (a.name > b.name) ? -1 : 1;
-		});
-		if (tservices != hash(services) || cascade == 1) {
-			console.log("CAPTAIN: rewriting loadbalancer");
-			writeHaproxyConfig(services);
-		}
-		tservices = hash(services);
+hostname_watcher.on('change', function(data, res) {
+	var hosts = data.map(function(path){
+		return path.replace('hostnames/', '');
+	}).filter(function(hosts){
+		return hosts.length > 0;
 	});
-}
+	fetchHostnames(hosts);
+});
 
-function fetchHostnames () {
-	etcd.get("/hostnames", function (err, kvs) {
-		var hnames = [];
-		try {
-			kvs.node.nodes.forEach(function (hostname) {
-				var key = hostname.key.replace('/hostnames/', '');
-				hnames[key] = hostname.value;
-			});
-		} catch (e) {}
-		hostnames = hnames;
-		fetchServices(1);
+hostname_watcher.on('error', function(err) {
+	console.log('error:', err);
+});
+
+
+/**
+* METADATA WATCHER
+* If new/changed metadata -> fetch metadata
+*/
+var metadata_watcher = consul.watch({ method: consul.kv.keys, options: {key: 'metadatas/', recursive: true} });
+
+metadata_watcher.on('change', function(data, res) {
+	var hosts = data.map(function(path){
+		return path.replace('metadatas/', '');
+	}).filter(function(hosts){
+		return hosts.length > 0;
 	});
-}
+	fetchMetadatas(hosts);
+});
 
-function fetchMetadata () {
-        etcd.get("/metadata", function (err, kvs) {
-                var metas = [];
-                try {
-                        kvs.node.nodes.forEach(function (metadata) {
-                                var key = metadata.key.replace('/metadata/', '');
-                                metas[key] = JSON.parse(metadata.value);
-                        });
-                } catch (e) {}
-                metadata = metas;
-		if(hash(metadata) !== hash_meta) {
-	                fetchServices(1);
-		}
-		hash_meta = hash(metadata);
-        });
+metadata_watcher.on('error', function(err) {
+	console.log('error:', err);
+});
+
+
+
+// UTILS
+function ip2hex (ip) {
+	var parts = ip.split('.');
+	ints = parts.map(function(part){return parseInt(part);});
+	var k = new Buffer(ints).toString('hex');
+	return k;
 }
 
 
@@ -117,55 +99,136 @@ function writeHaproxyConfig (services) {
 	fs.readFile('haproxy.template', {encoding:'utf-8'}, function (err, content) {
 		var template = Handlebars.compile(content);
 		var output = template({services: services});
-		//console.log(output, services);
+
+		console.log("WRITING HAPROXY CONFIGURATION");
 		fs.writeFile('haproxy.cfg', output, function (err) {
 			haproxy.reload();
 		});
 	});
 }
+
 /*
-function writeFleetdConfig (template, service) {
-	fs.readFile(template, {encoding: 'utf-8'}, function (err, content) {
-		var template = Handlebars.compile(content);
-		var output = template({service: service});
-		console.log(output);
-	});
-}
-function writeServiceConfig (service) {
-	writeFleetdConfig('discovery.tpl', service);
-	writeFleetdConfig('webservice.tpl', service);
-}
+* SERVICES
 */
 
-function handleService (service_item) {
-	var service = {};
-	service.name = service_item.key.replace('/services/', '');
-	service.host = hostnames[service.name] ? hostnames[service.name] : service.name+".slush.org";
-	service.meta = metadata[service.name] ? metadata[service.name] : {};
-	service.servers = [];
-	try {
-	service.servers = service_item.nodes
-	.map(handleServers)
-	.sort(function (a, b) {
-			return (a.name > b.name) ? -1 : 1;
+// Fetching single service
+function fetchService (service_key) {
+	var deferred = Q.defer();
+	consul.catalog.service.nodes(service_key, function(err, result) {
+		if (err) {
+			deferred.reject(err);
+		} else {
+			var service = {};
+			service.name = service_key;
+			service.host = hostnames[service_key] ? hostnames[service_key] : service.name + '.slush.org';
+			service.meta = metadata[service_key] ? metadata[service_key] : {};
+			service.servers = result.map(handleNode);
+			deferred.resolve(service);			
+		}
+	});
+	return deferred.promise;
+}
+
+function handleNode (node) {
+	return {
+		name: node.Node +'_'+ ip2hex(node.Address),
+		address: node.Address + ':' + node.ServicePort
+	};
+}
+
+function fetchServiceNames() {
+	var deferred = Q.defer();
+	consul.catalog.service.list(function (err, data) {
+		if (err) {
+			deferred.reject(err);
+		} else {
+			var web_services = Object.keys(data).filter(function(key) {
+				return data[key].indexOf('web') != -1;
+			});
+			deferred.resolve(web_services);			
+		}
+	});
+	return deferred.promise;
+}
+
+function fetchServices () {
+	var service_keys = fetchServiceNames();
+	service_keys
+	.then(function (keys) {
+		// Fetches all services, combines with metadata and host
+		var services = keys.map(fetchService);
+		Q.all(services)
+		.then(function (services) {
+			//console.log(JSON.stringify(services,null, 3));
+			// Write configuration and reload haproxy
+			writeHaproxyConfig(services);
 		});
-	} catch(e) {
-		console.log("CAPTAIN: No backend for " + service.name);
-	}
-	return service;
+	});
 }
 
-function handleServers (server_item) {
-	var server = {};
-	var ks = server_item.key.split('/');
-	server.name = ip2hex(ks[ks.length-1]);
-	server.address = server_item.value;
-	return server;
+/*
+* HOSTNAMES
+*/
+
+function fetchHostnames (keys) {
+	var names = keys.map(fetchHostname);
+	Q.all(names)
+	.then(function (names) {
+		hostnames = {};
+		names.forEach(function (hname) {
+			hostnames[hname.service] = hname.hostname;
+		});
+		// Call fetch services
+		fetchServices();
+	});
 }
 
-function ip2hex (ip) {
-	var parts = ip.split('.');
-	ints = parts.map(function(part){return parseInt(part);});
-	var k = new Buffer(ints).toString('hex');
-	return k;
+function fetchHostname (name) {
+	var deferred = Q.defer();
+	consul.kv.get('hostnames/'+name, function(err, result) {
+		if (err) {
+			deferred.reject(err);
+		} else {
+			deferred.resolve({
+				service: name,
+				hostname: result.Value
+			});
+		}
+	});
+	return deferred.promise;
 }
+
+/*
+* METADATA
+*/
+
+function fetchMetadatas (keys) {
+	var metas = keys.map(fetchMetadata);
+	Q.all(metas)
+	.then(function (metas) {
+		metadata = {};
+		metas.forEach(function (md) {
+			metadata[md.service] = md.data;
+		});
+		// Call fetch services
+		fetchServices();
+	});
+}
+
+
+function fetchMetadata (service) {
+	var deferred = Q.defer();
+	consul.kv.get('metadatas/'+service, function(err, result) {
+		if (err) {
+			deferred.reject(err);
+		} else {
+			deferred.resolve({
+				service: service,
+				data: JSON.parse(result.Value)
+			});
+		}
+	});
+	return deferred.promise;
+}
+
+

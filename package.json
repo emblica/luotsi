@@ -9,10 +9,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "consul": "^0.14.0",
     "debounce": "^1.0.0",
     "handlebars": "^3.0.0",
     "haproxy": "^0.1.0",
-    "node-etcd": "^3.0.2",
-    "object-hash": "^0.5.0"
+    "object-hash": "^0.5.0",
+    "q": "^1.2.0"
   }
 }

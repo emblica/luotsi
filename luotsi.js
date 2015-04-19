@@ -6,10 +6,10 @@ var hash = require('object-hash');
 
 var HAProxy = require('haproxy');
 
-var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg'});
+var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg', discover: true});
 
 var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
-var haproxy_path = '/usr/sbin/haproxy';
+
 
 var PORT = 514;
 var HOST = '127.0.0.1';
@@ -30,9 +30,6 @@ server.on('message', function (message, remote) {
 server.bind(PORT, HOST);
 
 
-haproxy.start(function (err) {
-  console.error(err);
-});
 
 //etcd.set("/services/testservice/10.10.0.1", "10.10.0.1:4555");
 //etcd.set("/services/testservice/10.10.0.2", "10.10.0.2:4555");
@@ -62,6 +59,9 @@ service_watcher.on('error', console.log);
 
 fetchHostnames();
 fetchMetadata();
+
+fetchServices(1);
+
 
 function fetchServices (cascade) {
 	etcd.get("/services", {recursive:true}, function (err, listing) {
@@ -119,7 +119,14 @@ function writeHaproxyConfig (services) {
 		var output = template({services: services});
 		//console.log(output, services);
 		fs.writeFile('haproxy.cfg', output, function (err) {
-			haproxy.reload();
+			HAProxy.running(function (err, running) {
+  				if (running) { haproxy.reload(); }
+  				else {
+  					haproxy.start(function (err) {
+						if (err) { console.error(err); }
+					});
+  				}
+			});
 		});
 	});
 }

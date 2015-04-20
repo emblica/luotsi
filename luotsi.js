@@ -119,9 +119,12 @@ function writeHaproxyConfig (services) {
 		var output = template({services: services});
 		//console.log(output, services);
 		fs.writeFile('haproxy.cfg', output, function (err) {
-			HAProxy.running(function (err, running) {
-  				if (running) { haproxy.reload(); }
-  				else {
+			haproxy.running(function (err, running) {
+  				if (running) {
+					haproxy.reload(true, function(err){
+						console.error(err);
+					});
+				} else {
   					haproxy.start(function (err) {
 						if (err) { console.error(err); }
 					});

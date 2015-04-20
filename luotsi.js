@@ -4,9 +4,51 @@ var Handlebars = require('handlebars');
 var debounce = require('debounce');
 var hash = require('object-hash');
 
+
+/*
+KILLER
+*/
+var exec = require('child_process').exec;
+
+
+function killallbut(npid) {
+
+	function notEmpty(cstr) {
+		return cstr.length > 0;
+	}
+
+	function kill(pid){
+		exec('kill -9 '+pid);
+	}
+
+	exec('ps ax |grep /usr/sbin/haproxy |grep -v grep', function(error, stdout, stderr){
+		var rows = stdout.split('\n');
+		var pids = rows.filter(notEmpty).map(function(row){
+			var r = row.split(/\s+/).filter(notEmpty);
+			return r[0];
+		}).filter(function(pid){
+			return pid !== npid;
+		}).forEach(function(pid){
+			kill(pid);
+		});
+	});
+
+}
+
+function readAndKill () {
+	fs.readFile('/var/run/haproxy.pid', function(err, pid) {
+		if (err) { return; }
+		killallbut(pid);
+	});
+}
+
+
+
+
+
 var HAProxy = require('haproxy');
 
-var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg', discover: true});
+var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg'});
 
 var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
 
@@ -18,12 +60,12 @@ var dgram = require('dgram');
 var server = dgram.createSocket('udp4');
 
 server.on('listening', function () {
-    var address = server.address();
-    console.log('UDP Server listening on ' + address.address + ":" + address.port);
+	var address = server.address();
+	console.log('UDP Server listening on ' + address.address + ":" + address.port);
 });
 
 server.on('message', function (message, remote) {
-    console.log(message.toString('utf-8'));
+	console.log(message.toString('utf-8'));
 
 });
 
@@ -96,20 +138,20 @@ function fetchHostnames () {
 }
 
 function fetchMetadata () {
-        etcd.get("/metadata", function (err, kvs) {
-                var metas = [];
-                try {
-                        kvs.node.nodes.forEach(function (metadata) {
-                                var key = metadata.key.replace('/metadata/', '');
-                                metas[key] = JSON.parse(metadata.value);
-                        });
-                } catch (e) {}
-                metadata = metas;
+	etcd.get("/metadata", function (err, kvs) {
+		var metas = [];
+		try {
+			kvs.node.nodes.forEach(function (metadata) {
+				var key = metadata.key.replace('/metadata/', '');
+				metas[key] = JSON.parse(metadata.value);
+			});
+		} catch (e) {}
+		metadata = metas;
 		if(hash(metadata) !== hash_meta) {
-	                fetchServices(1);
+			fetchServices(1);
 		}
 		hash_meta = hash(metadata);
-        });
+	});
 }
 
 
@@ -120,15 +162,15 @@ function writeHaproxyConfig (services) {
 		//console.log(output, services);
 		fs.writeFile('haproxy.cfg', output, function (err) {
 			haproxy.running(function (err, running) {
-  				if (running) {
+				if (running) {
 					haproxy.reload(true, function(err){
-						console.error(err);
+						readAndKill();
 					});
 				} else {
-  					haproxy.start(function (err) {
+					haproxy.start(function (err) {
 						if (err) { console.error(err); }
 					});
-  				}
+				}
 			});
 		});
 	});
@@ -154,9 +196,9 @@ function handleService (service_item) {
 	service.meta = metadata[service.name] ? metadata[service.name] : {};
 	service.servers = [];
 	try {
-	service.servers = service_item.nodes
-	.map(handleServers)
-	.sort(function (a, b) {
+		service.servers = service_item.nodes
+		.map(handleServers)
+		.sort(function (a, b) {
 			return (a.name > b.name) ? -1 : 1;
 		});
 	} catch(e) {

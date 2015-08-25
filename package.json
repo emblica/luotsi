@@ -11,7 +11,6 @@
   "dependencies": {
     "debounce": "^1.0.0",
     "handlebars": "^3.0.0",
-    "haproxy": "^0.1.0",
     "node-etcd": "^3.0.2",
     "object-hash": "^0.5.0"
   }

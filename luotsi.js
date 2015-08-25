@@ -5,54 +5,50 @@ var debounce = require('debounce');
 var hash = require('object-hash');
 
 
-/*
-KILLER
-*/
-var exec = require('child_process').exec;
+var spawn = require('child_process').spawn
 
 
-function killallbut(npid) {
-
-	function notEmpty(cstr) {
-		return cstr.length > 0;
-	}
-
-	function kill(pid){
-		exec('kill -9 '+pid);
-	}
-
-	exec('ps ax |grep /usr/sbin/haproxy |grep -v grep', function(error, stdout, stderr){
-		var rows = stdout.split('\n');
-		var pids = rows.filter(notEmpty).map(function(row){
-			var r = row.split(/\s+/).filter(notEmpty);
-			return r[0];
-		}).filter(function(pid){
-			return pid !== npid;
-		}).forEach(function(pid){
-			kill(pid);
-		});
-	});
-
-}
-
-function readAndKill () {
-	fs.readFile('/var/run/haproxy.pid', function(err, pid) {
-		if (err) { return; }
-		killallbut(pid);
-	});
-}
-
-
-
-
-
-var HAProxy = require('haproxy');
-
-var haproxy = new HAProxy('/tmp/haproxy.sock', {config: '/data/luotsi/haproxy.cfg'});
+var config = '/data/luotsi/haproxy.cfg';
+var haproxy_bin = '/usr/sbin/haproxy-systemd-wrapper';
 
 var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
 
+var Haproxy = function (config_path) {
+	var self = this;
+	this.config_path = config_path;
+	this.pid = -1;
+	this.pid_file = '/run/haproxy.pid';
+	this.start = function () {
+		self.haprocess = spawn(haproxy_bin, ['-f', self.config_path, '-p', self.pid_file]);
+		self.pid = self.haprocess.pid;
+		self.haprocess.on('close', function (code) {
+			process.exit(code);
+		});
+	};
+	this.running = function (cb) {
+			fs.exists('/proc/' + pid, function (exists) {
+				return cb(null, exists)
+			});
+	};
+	this.reload = function () {
+		process.kill(self.pid, 'SIGUSR1');
+	};
+	this.terminate = function () {
+		process.kill(self.pid, 'SIGKILL');
+	};
 
+	return this;
+}
+
+var haproxy = new Haproxy(config);
+process.on('SIGTERM', function() {
+	haproxy.terminate();
+	process.exit(code);
+});
+
+/*
+* LOG COLLECTOR
+*/
 var PORT = 514;
 var HOST = '127.0.0.1';
 
@@ -163,13 +159,11 @@ function writeHaproxyConfig (services) {
 		fs.writeFile('haproxy.cfg', output, function (err) {
 			haproxy.running(function (err, running) {
 				if (running) {
-					haproxy.reload(true, function(err){
-						readAndKill();
-					});
+					console.log("LB is running... Reloading!");
+					haproxy.reload();
 				} else {
-					haproxy.start(function (err) {
-						if (err) { console.error(err); }
-					});
+					console.log("LB is NOT running. Starting!");
+					haproxy.start();
 				}
 			});
 		});

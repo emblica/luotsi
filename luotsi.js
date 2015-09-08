@@ -26,7 +26,7 @@ var Haproxy = function (config_path) {
 		});
 	};
 	this.running = function (cb) {
-			fs.exists('/proc/' + pid, function (exists) {
+			fs.exists('/proc/' + self.pid, function (exists) {
 				return cb(null, exists)
 			});
 	};

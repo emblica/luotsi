@@ -1,6 +1,6 @@
 global
-    log 10.1.1.139 local0
-    log 10.1.1.139 local1 notice
+    log 127.0.0.1 local0
+    log 127.0.0.1 local1 notice
     maxconn 200000
     user haproxy
     group haproxy

@@ -61,8 +61,7 @@ server.on('listening', function () {
 });
 
 server.on('message', function (message, remote) {
-	console.log(message.toString('utf-8'));
-
+	client.send(message, 0, message.length, 5145, 'monitor-in.slush.xyz');
 });
 
 server.bind(PORT, HOST);

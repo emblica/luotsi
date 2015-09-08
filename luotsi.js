@@ -31,7 +31,7 @@ var Haproxy = function (config_path) {
 			});
 	};
 	this.reload = function () {
-		process.kill(self.pid, 'SIGUSR1');
+		process.kill(self.pid, 'SIGUSR2');
 	};
 	this.terminate = function () {
 		process.kill(self.pid, 'SIGKILL');

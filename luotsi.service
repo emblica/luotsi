@@ -11,8 +11,8 @@ ExecStartPre=-/usr/bin/docker rm luotsi
 ExecStartPre=/usr/bin/docker pull 10.1.1.85:5000/slush-luotsi
 ExecStart=/usr/bin/bash -c \
 "/usr/bin/docker run --privileged --name luotsi \
--p 80:80 \
--p 443:443 \
+-p 0.0.0.0:80:80 \
+-p 0.0.0.0:443:443 \
 -e HOST_IP=${COREOS_PRIVATE_IPV4} \
 -e ETCD_PORT=4001 \
 10.1.1.85:5000/slush-luotsi"

@@ -3,6 +3,7 @@ var fs = require('fs');
 var Handlebars = require('handlebars');
 var debounce = require('debounce');
 var hash = require('object-hash');
+var HAProxy = require('haproxy');
 
 
 var spawn = require('child_process').spawn
@@ -13,38 +14,7 @@ var haproxy_bin = '/usr/sbin/haproxy-systemd-wrapper';
 
 var etcd = new Etcd(process.env.HOST_IP, process.env.ETCD_PORT);
 
-var Haproxy = function (config_path) {
-	var self = this;
-	this.config_path = config_path;
-	this.pid = -1;
-	this.pid_file = '/run/haproxy.pid';
-	this.start = function () {
-		self.haprocess = spawn(haproxy_bin, ['-f', self.config_path, '-p', self.pid_file]);
-		self.pid = self.haprocess.pid;
-		self.haprocess.on('close', function (code) {
-			process.exit(code);
-		});
-	};
-	this.running = function (cb) {
-			fs.exists('/proc/' + self.pid, function (exists) {
-				return cb(null, exists)
-			});
-	};
-	this.reload = function () {
-		process.kill(self.pid, 'SIGUSR2');
-	};
-	this.terminate = function () {
-		process.kill(self.pid, 'SIGKILL');
-	};
-
-	return this;
-}
-
-var haproxy = new Haproxy(config);
-process.on('SIGTERM', function() {
-	haproxy.terminate();
-	process.exit(code);
-});
+var haproxy = new HAProxy('/tmp/haproxy.sock', { config: config, discover: true });
 
 /*
 * LOG COLLECTOR
@@ -159,10 +129,18 @@ function writeHaproxyConfig (services) {
 			haproxy.running(function (err, running) {
 				if (running) {
 					console.log("LB is running... Reloading!");
-					haproxy.reload();
+					haproxy.reload(function (err) {
+						if (err) {console.error(err);}
+						console.log("LB reloaded!");
+					});
 				} else {
 					console.log("LB is NOT running. Starting!");
-					haproxy.start();
+					haproxy.stop(true, function(err) {
+						console.error(err);
+						haproxy.start(function (err) {
+							console.log("LB started!");
+						});
+					});
 				}
 			});
 		});
@@ -214,3 +192,11 @@ function ip2hex (ip) {
 	var k = new Buffer(ints).toString('hex');
 	return k;
 }
+
+process.on('SIGTERM', function () {
+  haproxy.stop(true, function(err){
+  	console.log("STOPPING LUOTSI", err);
+  });
+});
+
+

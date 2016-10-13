@@ -1,6 +1,6 @@
 {
-  "name": "slush-luotsi",
-  "version": "1.0.0",
+  "name": "halti-luotsi",
+  "version": "0.1.0",
   "description": "",
   "main": "luotsi.js",
   "scripts": {
@@ -9,8 +9,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "bluebird": "^3.3.4",
-    "handlebars": "^3.0.0",
-    "node-fetch": "^1.5.0"
+    "axios": "^0.15.0",
+    "bluebird": "^3.3.6",
+    "handlebars": "^4.0.5",
+    "winston": "^2.2.0"
   }
 }

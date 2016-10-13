@@ -7,7 +7,10 @@ global
     group haproxy
     stats socket /tmp/haproxy.sock level admin
     tune.ssl.default-dh-param 2048
-    ssl-default-bind-ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK
+    ssl-default-bind-ciphers ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS
+    ssl-default-bind-options no-sslv3 no-tls-tickets
+    ssl-default-server-ciphers ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS
+    ssl-default-server-options no-sslv3 no-tls-tickets
 
 
 defaults
@@ -19,8 +22,8 @@ defaults
     option forwardfor
     option contstats
     stats enable
-    stats auth hadmin:hadmin
-    stats uri /haproxy
+    stats auth {{{settings.stats.user}}}:{{{settings.stats.pass}}}
+    stats uri {{{settings.stats.uri}}}
     timeout connect 10000ms
     timeout client 50000ms
     timeout server 50000ms
@@ -30,15 +33,15 @@ defaults
 frontend http
     bind *:80
     # If real errors then show mainentance page
-    errorfile  503 /etc/haproxy/maintenance.http
+    errorfile  503 {{{settings.maintenance_page}}}
     http-request set-header X-Forwarded-Proto http
 
     default_backend web_maintenance
 
 frontend https
-    bind *:443 ssl no-sslv3 no-tlsv10 crt /etc/haproxy/slush.pem
+    bind *:443 ssl no-sslv3 no-tlsv10 crt {{{settings.cert_path}}}
     # If real errors then show mainentance page
-    errorfile  503 /etc/haproxy/maintenance.http
+    errorfile  503 {{{settings.maintenance_page}}}
 
     http-request set-header X-Forwarded-Proto https
     default_backend web_maintenance
@@ -46,11 +49,21 @@ frontend https
     # ACLs for hostnames
     {{#each loadbalancers}}
     acl {{{name}}}_acl hdr(host) -i {{{hostname}}}
+    {{#if network}}
+    # Network whitelist
+    acl {{{name}}}_whitelist_acl src {{{network}}}
+    {{/if}}
     {{/each}}
 
     # Backends
     {{#each loadbalancers}}
+    {{#if network}}
+    # Network whitelisted backend for {{name}}
+    use_backend {{{name}}}-backend if {{{name}}}_acl {{{name}}}_whitelist_acl
+    {{else}}
+    # Normal backend for {{name}}
     use_backend {{{name}}}-backend if {{{name}}}_acl
+    {{/if}}
     {{/each}}
 
 
@@ -75,4 +88,4 @@ backend {{{name}}}-backend
 
 backend web_maintenance
     mode http
-    errorfile  503 /etc/haproxy/maintenance.http
+    errorfile  503 {{settings.maintenance_page}}

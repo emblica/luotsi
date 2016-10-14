@@ -33,7 +33,7 @@ const settings = {
 	},
 	maintenance_page: process.env.MAINTENANCE_PAGE || '/etc/haproxy/maintenance.http',
 	cert_path: process.env.CERT_PATH ||'/etc/haproxy/cert.pem',
-
+  ssl: process.env.SSL_ENABLED == 'true'
 }
 
 const template_file = 'haproxy.template';

@@ -25,7 +25,7 @@ defaults
     option contstats
     stats enable
     stats auth {{{settings.stats.user}}}:{{{settings.stats.pass}}}
-    stats uri {{{settings.stats.uri}}}
+    stats uri {{{settings.stats.path}}}
     timeout connect 10000ms
     timeout client 50000ms
     timeout server 50000ms

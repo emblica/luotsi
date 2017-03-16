@@ -1,0 +1,57 @@
+[
+  {
+    "force_https": false,
+    "name": "analytics-kibana",
+    "hostname": "kibana.services.example.com",
+    "ports": {
+      "https": true,
+      "http": true
+    },
+    "network": "172.16.0.0/12 80.69.169.128/26",
+    "service_id": "b0fad9e5-cd6d-4f52-914d-551858086572",
+    "loadbalancer_id": "f164603e-ddbb-4db1-82c1-1ebe3cd66f4e",
+    "backends": [],
+    "enabled": true,
+    "source_port": 5601
+  },
+  {
+    "ports": {
+      "https": true,
+      "http": true
+    },
+    "force_https": false,
+    "source_port": 3000,
+    "service_id": "ef980fee-077d-4d92-8abd-4f470e752d3a",
+    "hostname": "metabase.services.example.com",
+    "enabled": true,
+    "name": "metabase",
+    "loadbalancer_id": "67d91aa4-245b-4689-a118-4287165446d4",
+    "backends": [
+      {
+        "instance_id": "47e2b4bd-69d5-456d-9eed-df61b2ce5d3c",
+        "address": "10.1.5.169",
+        "port": 32797
+      }
+    ]
+  },
+  {
+    "loadbalancer_id": "8914502d-5b02-41fe-8ede-33ef327850f0",
+    "name": "webapp-1",
+    "enabled": true,
+    "hostname": "billing.services.example.com",
+    "service_id": "65063272-2372-4f83-8906-23866c6721ce",
+    "source_port": 8080,
+    "force_https": false,
+    "ports": {
+      "http": true,
+      "https": true
+    },
+    "backends": [
+      {
+        "instance_id": "47e2b4bd-69d5-456d-9eed-df61b2ce5d3c",
+        "address": "10.1.5.169",
+        "port": 32801
+      }
+    ]
+  }
+]

@@ -5,7 +5,7 @@ const R = require('ramda')
 const test = require('tape')
 
 const LBConfig = require('./mock_lb_config.json')
-const {SETTINGS, md5, renderConfig, readFile, luotsiPoll} = require('./luotsi')
+const {SETTINGS, md5, renderConfig, readFile, luotsiPoll} = require('../luotsi')
 
 const mock = new MockAdapter(A)
 
@@ -16,13 +16,13 @@ const rowFromConfig = '# LB        f164603e-ddbb-4db1-82c1-1ebe3cd66f4e'
 
 
 test('test md5 checksumming of the LBConfig', (t) => {
-    t.plan(3)
-    const d1 = JSON.stringify(LBConfig)
-    const d2 = JSON.stringify(R.assocPath([0, 'name'], 'foobar', LBConfig))
-    const [r1, r2, r3] = [md5(d1), md5(d1), md5(d2)]
-    t.equal(typeof(r1), 'string')
-    t.equal(r1, r2)
-    t.notEqual(r2, r3)
+  t.plan(3)
+  const d1 = JSON.stringify(LBConfig)
+  const d2 = JSON.stringify(R.assocPath([0, 'name'], 'foobar', LBConfig))
+  const [r1, r2, r3] = [md5(d1), md5(d1), md5(d2)]
+  t.equal(typeof(r1), 'string')
+  t.equal(r1, r2)
+  t.notEqual(r2, r3)
 })
 
 
@@ -38,10 +38,10 @@ test('test rendering HAProxy config from LBConfig', (t) => {
 
 
 test('test the Luotsi behavior when polling a new config', t => {
-  t.plan(3) // # of asserts
+  t.plan(2) // # of asserts
   mock.onGet('http://localhost:4040/api/v1/loadbalancers/config').reply(200, LBConfig)
 
-  const HAProxyReload = (config) => {
+  const test_reconfig = (config) => {
     return new Promise((resolve, reject) => {
       t.true(config.includes(rowFromConfig))
       t.pass()
@@ -50,15 +50,13 @@ test('test the Luotsi behavior when polling a new config', t => {
   }
 
   // asserts 1 and 2
-  luotsiPoll(HAProxyReload)
+  luotsiPoll(test_reconfig)
 
-  // try again, should not call HAProxyReload, but should call noReload
-
+  // try again, should not call test_reconfig
   // timeout to ensure the above luotsiPoll has finished (ugly but works)
   setTimeout(() => {
     luotsiPoll(
-      () => t.fail(), // shouldn't get called
-      () => t.pass()  // should get called -> assert 3
+      () => t.fail() // shouldn't get called
     )
   }, 200)
 

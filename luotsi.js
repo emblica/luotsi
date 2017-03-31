@@ -9,7 +9,7 @@ const exec = require('child_process').exec
 const env = (k, d) => process.env[k] || d
 
 
-/* CHECKSUM STATE */
+/* CHECKSUM STATE (mutable global) */
 
 let CHECKSUM = ''
 
@@ -21,9 +21,9 @@ const VERSION = '0.1.1'
 
 const SETTINGS = {
   cert_path: env('CERT_PATH', '/etc/haproxy/cert.pem'),
-  config_file: NODE_ENV == 'TEST' ? 'test_haproxy.cfg' : env('HAPROXY_CONF', '/etc/haproxy/haproxy.cfg'),
   halti_url: env('HALTI_URL', 'http://localhost:4040') + '/api/v1/loadbalancers/config',
-  loop_interval: 5000,
+  log_level: env('LOG_LEVEL', 'info'),
+  loop_interval: env('LOOP_INTERVAL', 5000),
   maintenance_page: env('MAINTENANCE_PAGE', '/etc/haproxy/maintenance.http'),
   stats: {
     path: '/haproxy',
@@ -32,6 +32,13 @@ const SETTINGS = {
   },
   ssl: env('SSL_ENABLED', 'true'),
   template_file: 'haproxy.template',
+  haproxy: {
+    user: env('HAPROXY_USER', 'haproxy'),
+    group: env('HAPROXY_GROUP', 'haproxy'),
+    config_file: env('HAPROXY_CONF', '/etc/haproxy/haproxy.cfg'),
+    reload_cmd: env('HAPROXY_RELOAD_CMD', 'service haproxy reload'),
+  }
+
 }
 
 
@@ -42,7 +49,7 @@ const noop = () => {}
 const readFile = Promise.promisify(fs.readFile)
 const writeFile = Promise.promisify(fs.writeFile)
 const logger = new (winston.Logger)({
-  transports: [new (winston.transports.Console)({'timestamp': true})]
+  transports: [new (winston.transports.Console)({'timestamp': true, 'level': SETTINGS.log_level})]
 })
 
 
@@ -50,20 +57,12 @@ const logger = new (winston.Logger)({
 
 const renderConfig = (tmpl, settings, loadbalancers) => Handlebars.compile(tmpl)({loadbalancers, settings})
 
+const reconfig = (config) => (
+  writeFile(SETTINGS.haproxy.config_file, config)
+    .then(() => Promise.promisify(exec)(SETTINGS.haproxy.reload_cmd))
+)
 
-function HAProxyReload (config) {
-  return writeFile(SETTINGS.config_file, config).then(() => {
-    logger.info('Reload haproxy')
-
-    const promisedExec = Promise.promisify(exec)
-    return promisedExec('service haproxy reload')
-  })
-}
-
-
-/* MAIN */
-
-function luotsiPoll (HAProxyReload, noReload=noop) {
+function luotsiPoll (reconfig) {
   Promise.all([
     readFile(SETTINGS.template_file, 'utf-8'),
     SETTINGS,
@@ -76,41 +75,30 @@ function luotsiPoll (HAProxyReload, noReload=noop) {
       CHECKSUM = hash // save checksum
 
       logger.info('Update haproxy config, new checksum: %s', CHECKSUM)
-      return HAProxyReload(config)
+      reconfig(config)
+        .then(() => logger.info('HAProxy running with new config.'))
+        .catch(e => logger.error(`HAProxy reconfig failed!\n${e}`))
     } else {
-      logger.debug(`Received config without any changes.`)
-      return noReload()
+      logger.debug(`Received config without any changes (checksum: ${hash}).`)
     }
-  }).catch(e => logger.error(`issue during polling loop\n ${e}`))
+  })
+  .catch(e => logger.error(`issue during polling loop\n ${e}`))
 }
 
+
+/* MAIN */
 
 function main() {
   logger.info('Halti - Luotsi loadbalancer v%s', VERSION)
   logger.info(`starting polling loop, with loop interval ${SETTINGS.loop_interval}ms`)
-  setInterval(luotsiPoll.bind(null, HAProxyReload), SETTINGS.loop_interval)
-}
-
-
-function devMain() {
-  const MockHAProxyReload = (config) => {
-    return new Promise((resolve, reject) => {
-      logger.info(`MockHAProxyReload - HAProxy config was NOT updated.`)
-    })
-  }
-
-  const noReload = () => {
-    logger.info(`noReload: config checksum did not change.`)
-  }
-
-  setInterval(luotsiPoll.bind(null, MockHAProxyReload, noReload), SETTINGS.loop_interval)
+  setInterval(luotsiPoll.bind(null, reconfig), SETTINGS.loop_interval)
 }
 
 
 /* ENTRYPOINT (with test exports) */
 
 if (NODE_ENV == 'PROD') main()
-else if (NODE_ENV == 'DEV') devMain()
+else if (NODE_ENV == 'DEV') main()
 else if (NODE_ENV == 'TEST') {
   module.exports = {
     md5, renderConfig, readFile, writeFile, SETTINGS, luotsiPoll

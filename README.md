@@ -29,3 +29,12 @@ make dev
 ```
 make test
 ```
+
+
+### Check HAProxy configuration
+
+* run `make dev` with `node tests/mock_halti.js` to generate a `haproxy.cfg` to check.
+
+```
+make check
+```

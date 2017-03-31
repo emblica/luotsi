@@ -3,8 +3,8 @@ global
     log /dev/log	local1 notice
     log-send-hostname
     maxconn 200000
-    user haproxy
-    group haproxy
+    user {{{settings.haproxy.user}}}
+    group {{{settings.haproxy.group}}}
     stats socket /tmp/haproxy.sock mode 660 level admin
     {{#if ssl}}
     tune.ssl.default-dh-param 2048
